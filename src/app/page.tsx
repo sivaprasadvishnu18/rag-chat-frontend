@@ -27,9 +27,9 @@ export default function Page() {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/chat", { method: "POST", body: JSON.stringify({ message: "__ping__", session_id: sessionId }) })
+    fetch("https://fast-api-1-0-s670.onrender.com/chat", { method: "POST", body: JSON.stringify({ message: "__ping__", session_id: sessionId }) })
       .catch(() => {}) // ignore 4xx if your backend rejects __ping__
-      .finally(() => setBackend("http://127.0.0.1:8000/"));
+      .finally(() => setBackend("https://fast-api-1-0-s670.onrender.com/"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -45,7 +45,7 @@ export default function Page() {
     setBusy(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://fast-api-1-0-s670.onrender.com/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, session_id: sessionId }),
@@ -87,9 +87,6 @@ export default function Page() {
         </header>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <div className="mb-3 text-xs text-slate-400">
-            Backend: <code>{backend || "(via /api/chat proxy)"}</code>
-          </div>
 
           <div className="flex max-h-[65vh] flex-col gap-3 overflow-y-auto pr-1">
             {messages.map((m, i) => (
