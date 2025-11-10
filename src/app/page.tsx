@@ -1,103 +1,151 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useMemo, useRef, useState } from "react";
+
+type Source = { id?: string | null; title?: string | null; score?: number | null };
+type Msg = { role: "user" | "assistant"; content: string; sources?: Source[] };
+
+function getOrCreateSessionId() {
+  if (typeof window === "undefined") return "default";
+  let sid = localStorage.getItem("session_id");
+  if (!sid) {
+    // a stable random id for memory continuity
+    sid = (crypto as any)?.randomUUID?.() || String(Date.now());
+    localStorage.setItem("session_id", sid || "default");
+  }
+  return sid;
+}
+
+export default function Page() {
+  const [messages, setMessages] = useState<Msg[]>([
+    { role: "assistant", content: "Hi! Ask me something and I’ll query the knowledge base." },
+  ]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [backend, setBackend] = useState<string>("");
+  const sessionId = useMemo(() => getOrCreateSessionId(), []);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/chat", { method: "POST", body: JSON.stringify({ message: "__ping__", session_id: sessionId }) })
+      .catch(() => {}) // ignore 4xx if your backend rejects __ping__
+      .finally(() => setBackend("http://127.0.0.1:8000/"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, busy]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput("");
+    setMessages((m) => [...m, { role: "user", content: text }]);
+    setBusy(true);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, session_id: sessionId }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(error || `HTTP ${res.status}`);
+      }
+      const data: { answer: string; sources?: Source[] } = await res.json();
+      setMessages((m) => [...m, { role: "assistant", content: data.answer ?? "", sources: data.sources ?? [] }]);
+    } catch (err: any) {
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: `⚠️ Error talking to backend: ${err?.message || "unknown error"}` },
+      ]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function newSession() {
+    localStorage.removeItem("session_id");
+    location.reload();
+  }
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="min-h-dvh px-4">
+      <div className="mx-auto max-w-3xl py-6">
+        <header className="mb-3 flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-slate-100">RAG Chat Client</h1>
+          <div className="flex items-center gap-2 text-xs text-slate-300">
+            <span className="rounded-full border border-slate-700 px-2 py-1">
+              Session: <code>{sessionId}</code>
+            </span>
+            <button onClick={newSession} className="rounded-md border border-slate-700 px-2 py-1 hover:bg-slate-800">
+              New Session
+            </button>
+          </div>
+        </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="mb-3 text-xs text-slate-400">
+            Backend: <code>{backend || "(via /api/chat proxy)"}</code>
+          </div>
+
+          <div className="flex max-h-[65vh] flex-col gap-3 overflow-y-auto pr-1">
+            {messages.map((m, i) => (
+              <div key={i} className="flex flex-col">
+                <div
+                  className={[
+                    "max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-3",
+                    m.role === "user"
+                      ? "self-end bg-indigo-600/20 ring-1 ring-indigo-600/40"
+                      : "self-start bg-slate-800 ring-1 ring-slate-700",
+                  ].join(" ")}
+                >
+                  {m.content}
+                </div>
+
+                {m.role === "assistant" && m.sources?.length ? (
+                  <div className="mt-2 self-start text-xs text-slate-300">
+                    <div className="mb-1 font-medium text-slate-200">Sources</div>
+                    <ul className="list-disc space-y-1 pl-5">
+                      {m.sources.map((s, j) => (
+                        <li key={j}>
+                          {s.title || s.id || `Document ${j + 1}`}
+                          {typeof s.score === "number" ? (
+                            <span className="ml-1 text-slate-400">(score: {s.score.toFixed(3)})</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {busy && <div className="self-start animate-pulse text-slate-400">Thinking…</div>}
+            <div ref={endRef} />
+          </div>
+
+          <div className="mt-4 flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) send();
+              }}
+              placeholder="Ask anything…"
+              className="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 outline-none focus:ring-2 focus:ring-indigo-600/40"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <button
+              onClick={send}
+              disabled={busy}
+              className="rounded-xl bg-indigo-600 px-4 py-3 font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
+            >
+              Send
+            </button>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      </div>
+    </main>
   );
 }
