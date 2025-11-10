@@ -7,8 +7,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "message is required" }, { status: 400 });
     }
 
-    console.log("Forwarding request to backend URL:", `${process.env.BACKEND_URL}`); 
-    const url = `${process.env.BACKEND_URL}/chat`;
+    console.log("Forwarding request to backend URL:", `${process.env.NEXT_PUBLIC_BACKEND_URL}`); 
+    const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/chat`;
     
     const res = await fetch(url, {
       method: "POST",

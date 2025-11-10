@@ -27,9 +27,9 @@ export default function Page() {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("https://fast-api-1-0-s670.onrender.com/chat", { method: "POST", body: JSON.stringify({ message: "__ping__", session_id: sessionId }) })
+    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/chat`, { method: "POST", body: JSON.stringify({ message: "__ping__", session_id: sessionId }) })
       .catch(() => {}) // ignore 4xx if your backend rejects __ping__
-      .finally(() => setBackend("https://fast-api-1-0-s670.onrender.com/"));
+      .finally(() => setBackend(`${process.env.NEXT_PUBLIC_BACKEND_URL}/`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -45,7 +45,7 @@ export default function Page() {
     setBusy(true);
 
     try {
-      const res = await fetch("https://fast-api-1-0-s670.onrender.com/chat", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, session_id: sessionId }),
